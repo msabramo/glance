@@ -399,6 +399,23 @@ class ReplicationCommandsTestCase(test_utils.BaseTestCase):
         self.assertEqual('117.7 MiB', _human_readable_size(123456789))
         self.assertEqual('36.3 GiB', _human_readable_size(39022543360))
 
+    def test_replication_size_with_no_slavetoken(self):
+        options = moves.UserDict()
+        options.slavetoken = None
+        args = ['localhost:9292']
+
+        # To make this test work, we'd have to simulate an HTTPUnauthorized
+        # exception
+        with mock.patch.object(glance_replicator,
+                               'get_image_service') as get_image_service:
+            imageservice = get_image_service.return_value
+            client = imageservice.return_value
+            client.get_images.side_effect = webob.exc.HTTPUnauthorized
+
+            self.assertRaises(
+                exception.MissingCredentialError,
+                glance_replicator.replication_size, options, args)
+
     def test_replication_dump(self):
         tempdir = self.useFixture(fixtures.TempDir()).path
 

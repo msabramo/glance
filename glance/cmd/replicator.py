@@ -341,11 +341,17 @@ def replication_size(options, args):
     imageservice = get_image_service()
     client = imageservice(http_client.HTTPConnection(server, port),
                           options.slavetoken)
-    for image in client.get_images():
-        LOG.debug('Considering image: %(image)s', {'image': image})
-        if image['status'] == 'active':
-            total_size += int(image['size'])
-            count += 1
+    try:
+        for image in client.get_images():
+            LOG.debug('Considering image: %(image)s', {'image': image})
+            if image['status'] == 'active':
+                total_size += int(image['size'])
+                count += 1
+    except exc.HTTPUnauthorized:
+        if not options.slavetoken:
+            raise exception.MissingCredentialError(required='slavetoken')
+        else:
+            raise
 
     print(_('Total size is %(size)d bytes (%(human_size)s) across '
             '%(img_count)d images') %
