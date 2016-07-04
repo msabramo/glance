@@ -335,6 +335,9 @@ def replication_size(options, args):
 
     server, port = utils.parse_valid_host_port(args.pop())
 
+    if not options.slavetoken:
+        raise exception.MissingCredentialError(required='slavetoken')
+
     total_size = 0
     count = 0
 
