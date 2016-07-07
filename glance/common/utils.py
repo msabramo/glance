@@ -34,6 +34,7 @@ import re
 import uuid
 
 from OpenSSL import crypto
+import os_client_config
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import encodeutils
@@ -41,6 +42,7 @@ from oslo_utils import excutils
 from oslo_utils import netutils
 from oslo_utils import strutils
 import six
+import six.moves.urllib.parse as urlparse
 from webob import exc
 
 from glance.common import exception
@@ -463,6 +465,34 @@ def is_valid_hostname(hostname):
 def is_valid_fqdn(fqdn):
     """Verify whether a host is a valid FQDN."""
     return re.match('^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', fqdn) is not None
+
+
+def parse_glance_ref(glance_ref):
+    """
+    Attempts to parse, given either:
+
+    - a "host:port" string
+    - an os_client_config cloud name (cloud specified in `clouds.yaml` file)
+
+    Invalid inputs will raise a ValueError, while valid inputs will return
+    a (host, port, token) tuple where the port will always be of type int.
+    The token will be None if given a "host:port" string.
+    """
+
+    if ':' in glance_ref:
+        return parse_valid_host_port(glance_ref) + (None,)
+
+    try:
+        session = os_client_config.make_rest_client('image', cloud=glance_ref)
+    except os_client_config.exceptions.OpenStackConfigException:
+        # If cloud isn't found, treat it as a "host:port" and let
+        # parse_valid_host_port raise exception about argument being invalid
+        return parse_valid_host_port(glance_ref) + (None,)
+    token = session.get_token()
+    image_url = session.get_endpoint()
+    host, port = urlparse.urlparse(image_url).netloc.split(':')
+
+    return (host, int(port), token)
 
 
 def parse_valid_host_port(host_port):

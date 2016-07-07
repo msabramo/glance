@@ -322,25 +322,27 @@ def _human_readable_size(num, suffix='B'):
 
 
 def replication_size(options, args):
-    """%(prog)s size <server:port>
+    """%(prog)s size <server:port>|<cloud>
 
     Determine the size of a glance instance if dumped to disk.
 
     server:port: the location of the glance instance.
+    cloud:       name of cloud in clouds.yaml file
     """
 
     # Make sure server info is provided
     if args is None or len(args) < 1:
         raise TypeError(_("Too few arguments."))
 
-    server, port = utils.parse_valid_host_port(args.pop())
+    server, port, token = utils.parse_glance_ref(args.pop())
+    if not token:
+        token = options.slavetoken
 
     total_size = 0
     count = 0
 
     imageservice = get_image_service()
-    client = imageservice(http_client.HTTPConnection(server, port),
-                          options.slavetoken)
+    client = imageservice(http_client.HTTPConnection(server, port), token)
     for image in client.get_images():
         LOG.debug('Considering image: %(image)s', {'image': image})
         if image['status'] == 'active':
@@ -355,11 +357,12 @@ def replication_size(options, args):
 
 
 def replication_dump(options, args):
-    """%(prog)s dump <server:port> <path>
+    """%(prog)s dump <server:port>|<cloud> <path>
 
     Dump the contents of a glance instance to local disk.
 
     server:port: the location of the glance instance.
+    cloud:       name of cloud in clouds.yaml file
     path:        a directory on disk to contain the data.
     """
 
@@ -368,11 +371,12 @@ def replication_dump(options, args):
         raise TypeError(_("Too few arguments."))
 
     path = args.pop()
-    server, port = utils.parse_valid_host_port(args.pop())
+    server, port, token = utils.parse_glance_ref(args.pop())
+    if not token:
+        token = options.mastertoken
 
     imageservice = get_image_service()
-    client = imageservice(http_client.HTTPConnection(server, port),
-                          options.mastertoken)
+    client = imageservice(http_client.HTTPConnection(server, port), token)
     for image in client.get_images():
         LOG.debug('Considering: %(image_id)s (%(image_name)s) '
                   '(%(image_size)d bytes)',
@@ -441,11 +445,12 @@ def _dict_diff(a, b):
 
 
 def replication_load(options, args):
-    """%(prog)s load <server:port> <path>
+    """%(prog)s load <server:port>|<cloud> <path>
 
     Load the contents of a local directory into glance.
 
     server:port: the location of the glance instance.
+    cloud:       name of cloud in clouds.yaml file
     path:        a directory on disk containing the data.
     """
 
@@ -454,11 +459,12 @@ def replication_load(options, args):
         raise TypeError(_("Too few arguments."))
 
     path = args.pop()
-    server, port = utils.parse_valid_host_port(args.pop())
+    server, port, token = utils.parse_glance_ref(args.pop())
+    if not token:
+        token = options.slavetoken
 
     imageservice = get_image_service()
-    client = imageservice(http_client.HTTPConnection(server, port),
-                          options.slavetoken)
+    client = imageservice(http_client.HTTPConnection(server, port), token)
 
     updated = []
 
@@ -516,12 +522,14 @@ def replication_load(options, args):
 
 
 def replication_livecopy(options, args):
-    """%(prog)s livecopy <fromserver:port> <toserver:port>
+    """%(prog)s livecopy <fromserver:port>|<fromcloud> <toserver:port>|<tocloud>
 
     Load the contents of one glance instance into another.
 
     fromserver:port: the location of the master glance instance.
+    fromcloud:       name of master cloud in clouds.yaml file
     toserver:port:   the location of the slave glance instance.
+    tocloud:         name of slave cloud in clouds.yaml file
     """
 
     # Make sure from-server and to-server are provided
@@ -530,13 +538,19 @@ def replication_livecopy(options, args):
 
     imageservice = get_image_service()
 
-    slave_server, slave_port = utils.parse_valid_host_port(args.pop())
+    slave_server, slave_port, slave_token = utils.parse_glance_ref(args.pop())
+    if not slave_token:
+        slave_token = options.slavetoken
     slave_conn = http_client.HTTPConnection(slave_server, slave_port)
-    slave_client = imageservice(slave_conn, options.slavetoken)
+    slave_client = imageservice(slave_conn, slave_token)
 
-    master_server, master_port = utils.parse_valid_host_port(args.pop())
+    master_server, master_port, master_token = utils.parse_glance_ref(
+        args.pop()
+    )
+    if not master_token:
+        master_token = options.mastertoken
     master_conn = http_client.HTTPConnection(master_server, master_port)
-    master_client = imageservice(master_conn, options.mastertoken)
+    master_client = imageservice(master_conn, master_token)
 
     updated = []
 
@@ -594,12 +608,14 @@ def replication_livecopy(options, args):
 
 
 def replication_compare(options, args):
-    """%(prog)s compare <fromserver:port> <toserver:port>
+    """%(prog)s compare <fromserver:port>|<fromcloud> <toserver:port>|<tocloud>
 
     Compare the contents of fromserver with those of toserver.
 
     fromserver:port: the location of the master glance instance.
+    fromcloud:       name of master cloud in clouds.yaml file
     toserver:port:   the location of the slave glance instance.
+    tocloud:         name of slave cloud in clouds.yaml file
     """
 
     # Make sure from-server and to-server are provided
@@ -608,13 +624,19 @@ def replication_compare(options, args):
 
     imageservice = get_image_service()
 
-    slave_server, slave_port = utils.parse_valid_host_port(args.pop())
+    slave_server, slave_port, slave_token = utils.parse_glance_ref(args.pop())
+    if not slave_token:
+        slave_token = options.slavetoken
     slave_conn = http_client.HTTPConnection(slave_server, slave_port)
-    slave_client = imageservice(slave_conn, options.slavetoken)
+    slave_client = imageservice(slave_conn, slave_token)
 
-    master_server, master_port = utils.parse_valid_host_port(args.pop())
+    master_server, master_port, master_token = utils.parse_glance_ref(
+        args.pop()
+    )
+    if not master_token:
+        master_token = options.mastertoken
     master_conn = http_client.HTTPConnection(master_server, master_port)
-    master_client = imageservice(master_conn, options.mastertoken)
+    master_client = imageservice(master_conn, master_token)
 
     differences = {}
 
